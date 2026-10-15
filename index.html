@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Tic Tac Toe</title>
+<style>
+:root{
+  --bg:#f6f5f1; --card:#ffffff; --text:#1d1d1f; --muted:#6b6b72;
+  --line:#dcdad3; --x:#e0533d; --o:#2f7de1; --win:#fff1b8;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#16161a; --card:#212127; --text:#f2f2f4; --muted:#9a9aa5;
+    --line:#34343d; --x:#ff7a64; --o:#6aa8ff; --win:#4a4222; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#16161a; --card:#212127; --text:#f2f2f4; --muted:#9a9aa5;
+  --line:#34343d; --x:#ff7a64; --o:#6aa8ff; --win:#4a4222; color-scheme:dark;
+}
+html,body{height:100%;margin:0}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  display:flex; align-items:center; justify-content:center;
+}
+.app{width:min(92vw,380px); text-align:center}
+h1{font-size:1.5rem; margin:0 0 .8rem}
+.modes{display:flex; gap:.5rem; justify-content:center; margin-bottom:1rem}
+.modes button{
+  flex:1; padding:.55rem; border-radius:10px; border:1px solid var(--line);
+  background:var(--card); color:var(--text); font:inherit; cursor:pointer;
+}
+.modes button.on{border-color:var(--o); box-shadow:0 0 0 1px var(--o) inset}
+#status{min-height:1.6em; margin:.2rem 0 .8rem; font-weight:600}
+.board{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:8px;
+  background:var(--line); padding:8px; border-radius:16px;
+}
+.cell{
+  aspect-ratio:1; border:0; border-radius:10px; background:var(--card);
+  font-size:clamp(2.4rem,14vw,3.6rem); font-weight:700; cursor:pointer;
+  color:var(--text); transition:transform .08s;
+}
+.cell:active:not(:disabled){transform:scale(.94)}
+.cell.X{color:var(--x)} .cell.O{color:var(--o)}
+.cell.win{background:var(--win)}
+.cell:disabled{cursor:default}
+.score{display:flex; justify-content:space-around; margin:1rem 0; color:var(--muted); font-size:.95rem}
+.score b{color:var(--text); font-size:1.2rem; display:block}
+#reset{
+  padding:.65rem 1.4rem; border-radius:10px; border:0; background:var(--text);
+  color:var(--bg); font:inherit; font-weight:600; cursor:pointer;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <h1>Tic Tac Toe</h1>
+  <div class="modes">
+    <button id="m2" class="on">2 Players</button>
+    <button id="m1">vs Computer</button>
+  </div>
+  <div id="status"></div>
+  <div class="board" id="board"></div>
+  <div class="score">
+    <div><b id="sx">0</b>X wins</div>
+    <div><b id="sd">0</b>Draws</div>
+    <div><b id="so">0</b>O wins</div>
+  </div>
+  <button id="reset">New game</button>
+</div>
+
+<script>
+const LINES=[[0,1,2],[3,4,5],[6,7,8],[0,3,6],[1,4,7],[2,5,8],[0,4,8],[2,4,6]];
+let board, turn, over, vsCPU=false;
+const score={X:0,D:0,O:0};
+const $=id=>document.getElementById(id);
+const boardEl=$('board'), statusEl=$('status');
+
+const cells=[...Array(9)].map((_,i)=>{
+  const b=document.createElement('button');
+  b.className='cell'; b.setAttribute('aria-label','cell '+(i+1));
+  b.onclick=()=>play(i); boardEl.appendChild(b); return b;
+});
+
+function winner(b){
+  for(const [a,c,d] of LINES) if(b[a]&&b[a]===b[c]&&b[a]===b[d]) return {who:b[a],line:[a,c,d]};
+  return b.every(Boolean)?{who:'D',line:[]}:null;
+}
+
+// Minimax: the computer (O) never loses.
+function minimax(b,isO){
+  const r=winner(b);
+  if(r) return r.who==='O'?1:r.who==='X'?-1:0;
+  let best=isO?-2:2;
+  for(let i=0;i<9;i++) if(!b[i]){
+    b[i]=isO?'O':'X';
+    const s=minimax(b,!isO);
+    b[i]='';
+    best=isO?Math.max(best,s):Math.min(best,s);
+  }
+  return best;
+}
+function cpuMove(){
+  let best=-2, move=-1;
+  for(let i=0;i<9;i++) if(!board[i]){
+    board[i]='O'; const s=minimax(board,false); board[i]='';
+    if(s>best){best=s;move=i}
+  }
+  return move;
+}
+
+function render(res){
+  cells.forEach((c,i)=>{
+    c.textContent=board[i]; c.className='cell '+board[i];
+    c.disabled=over||!!board[i];
+    if(res&&res.line.includes(i)) c.classList.add('win');
+  });
+  if(res) statusEl.textContent=res.who==='D'?"It's a draw!":res.who+' wins! 🎉';
+  else statusEl.textContent=(vsCPU&&turn==='O')?'Computer is thinking…':turn+"'s turn";
+}
+
+function finish(res){
+  over=true; score[res.who]++;
+  $('sx').textContent=score.X; $('sd').textContent=score.D; $('so').textContent=score.O;
+  render(res);
+}
+
+function play(i){
+  if(over||board[i]||(vsCPU&&turn==='O')) return;
+  board[i]=turn;
+  let res=winner(board);
+  if(res) return finish(res);
+  turn=turn==='X'?'O':'X'; render();
+  if(vsCPU&&turn==='O') setTimeout(()=>{
+    board[cpuMove()]='O';
+    res=winner(board);
+    if(res) return finish(res);
+    turn='X'; render();
+  },350);
+}
+
+function newGame(){ board=Array(9).fill(''); turn='X'; over=false; render(); }
+function setMode(cpu){
+  vsCPU=cpu; $('m1').classList.toggle('on',cpu); $('m2').classList.toggle('on',!cpu);
+  score.X=score.D=score.O=0; ['sx','sd','so'].forEach(k=>$(k).textContent=0); newGame();
+}
+$('m1').onclick=()=>setMode(true);
+$('m2').onclick=()=>setMode(false);
+$('reset').onclick=newGame;
+newGame();
+</script>
+</body>
+</html>
